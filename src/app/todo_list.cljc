@@ -6,6 +6,8 @@
             [hyperfiddle.electric-dom2 :as dom]
             [hyperfiddle.electric-ui4 :as ui]
             
+            [contrib.missionary-contrib :as mx]
+            [missionary.core :as m]
               #?(:cljs ["react" :as react])
             #?(:cljs ["slate" :refer [createEditor]])
             #?(:cljs ["slate-react" :refer [Slate Editable withReact]])
@@ -36,7 +38,7 @@
       (e/on-unmount #(.unmount root#)))))
 
 (defn get-text [editor] (.-text (get (.-children (get (.-children editor) 0)) 0)))
-(defn block [data]
+(defn block [data on-change]
   #?(:cljs
      (let [[editor] (react/useState (fn [] (withReact (createEditor))))]
        [:> Slate
@@ -44,7 +46,10 @@
          :initialValue [{:children
                          [{:text (:value data)}],
                          :type "paragraph"}]
-         :onChange (fn [value] (println "onChange:" (-> value (get 0) (.-children) (get 0) (.-text)) ".  Not a plain function") )}
+         ;; :onChange on-change also works
+         :onChange (fn [value]
+                     (println "onChange:" (-> value (get 0) (.-children) (get 0) (.-text)) ".  Not a plain function")
+                     (on-change value))}
         [:> Editable
          {:onKeyDown (fn [e]
                       
@@ -82,13 +87,11 @@
 
 (e/defn TodoCreate []
   (e/client
-    ;; (InputSubmit. (e/fn [v]
-    ;;                 (e/server
-    ;;                   (d/transact! !conn [{:task/description v
-    ;;                                        :task/status :active}])
-    ;;                   nil)))
-    (with-reagent block {:uid "test1-uid" :value "test1"})
-   ))
+    (let [on-change (m/mbx)]
+      (with-reagent block {:uid "test1-uid" :value "test1"} on-change)
+      (let [[state v] (e/for-event-pending-switch [v (m/relieve {} (mx/poll-task on-change))]
+                        (e/server (prn :onChange v)))]
+        (case state (::e/pending ::e/failed) (throw v) (::e/init ::e/ok) v)))))
 
 #?(:clj (defn todo-count [db]
           (count
