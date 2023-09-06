@@ -13,3 +13,8 @@ report.html
 .lsp
 .clj-kondo
 /target
+
+.lsp
+resources/public/js
+.DS_Store
+package-lock.json

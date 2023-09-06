@@ -1,12 +1,59 @@
 (ns app.todo-list
+  #?(:cljs (:require-macros [app.todo-list :refer [with-reagent]]))
   (:require contrib.str
             #?(:clj [datascript.core :as d]) ; database on server
             [hyperfiddle.electric :as e]
             [hyperfiddle.electric-dom2 :as dom]
-            [hyperfiddle.electric-ui4 :as ui]))
+            [hyperfiddle.electric-ui4 :as ui]
+            
+              #?(:cljs ["react" :as react])
+            #?(:cljs ["slate" :refer [createEditor]])
+            #?(:cljs ["slate-react" :refer [Slate Editable withReact]])
+            #?(:cljs [reagent.core :as r])
+            #?(:cljs ["react-dom/client" :as ReactDom])
+            )
+  
+
+  )
+
+
 
 #?(:clj (defonce !conn (d/create-conn {}))) ; database on server
 (e/def db) ; injected database ref; Electric defs are always dynamic
+
+
+#?(:cljs (defn create-root
+           "See https://reactjs.org/docs/react-dom-client.html#createroot"
+           ([node] (create-root node (str (gensym))))
+           ([node id-prefix]
+            (ReactDom/createRoot node #js {:identifierPrefix id-prefix}))))
+#?(:cljs (defn render [root & args]
+           (.render root (r/as-element (into [:f>] args)))))
+(defmacro with-reagent [& args]
+  `(dom/div  ; React will hijack this element and empty it.
+    (let [root# (create-root dom/node)]
+      (render root# ~@args)
+      (e/on-unmount #(.unmount root#)))))
+
+(defn get-text [editor] (.-text (get (.-children (get (.-children editor) 0)) 0)))
+(defn block [data]
+  #?(:cljs
+     (let [[editor] (react/useState (fn [] (withReact (createEditor))))]
+       [:> Slate
+        {:editor editor
+         :initialValue [{:children
+                         [{:text (:value data)}],
+                         :type "paragraph"}]
+         :onChange (fn [value] (println "onChange:" (-> value (get 0) (.-children) (get 0) (.-text)) ".  Not a plain function") )}
+        [:> Editable
+         {:onKeyDown (fn [e]
+                      
+                       (when (= (.-key e) "Enter")
+                         (println "onKeyDown: Enter, A plain function. ")
+                         
+                         )
+                      
+                       )}]])))
 
 (e/defn TodoItem [id]
   (e/server
@@ -35,11 +82,13 @@
 
 (e/defn TodoCreate []
   (e/client
-    (InputSubmit. (e/fn [v]
-                    (e/server
-                      (d/transact! !conn [{:task/description v
-                                           :task/status :active}])
-                      nil)))))
+    ;; (InputSubmit. (e/fn [v]
+    ;;                 (e/server
+    ;;                   (d/transact! !conn [{:task/description v
+    ;;                                        :task/status :active}])
+    ;;                   nil)))
+    (with-reagent block {:uid "test1-uid" :value "test1"})
+   ))
 
 #?(:clj (defn todo-count [db]
           (count
